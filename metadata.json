@@ -1,0 +1,7 @@
+{
+  "name": "BetMaster  - Advanced Sportsbook",
+  "description": "A comprehensive, AI-powered sports betting platform featuring dynamic odds, risk management dashboards, and responsible gaming modules.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
