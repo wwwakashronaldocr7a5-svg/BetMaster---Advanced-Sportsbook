@@ -21,7 +21,10 @@ import {
   Check,
   Building2,
   QrCode,
-  Zap
+  Zap,
+  Info,
+  Lock,
+  CreditCard as CardIcon
 } from 'lucide-react';
 
 interface WalletProps {
@@ -41,6 +44,8 @@ const UPI_APPS = [
 const MOCK_BANKS = [
   { id: 'b1', name: 'HDFC Bank', acc: '**** 4421', icon: <Landmark className="text-blue-400" size={24} /> },
   { id: 'b2', name: 'ICICI Bank', acc: '**** 8812', icon: <Landmark className="text-orange-400" size={24} /> },
+  { id: 'b3', name: 'State Bank of India', acc: '**** 9901', icon: <Landmark className="text-blue-600" size={24} /> },
+  { id: 'b4', name: 'Axis Bank', acc: '**** 1122', icon: <Landmark className="text-purple-600" size={24} /> },
 ];
 
 const PRESET_AMOUNTS = [500, 1000, 2000, 5000];
@@ -50,10 +55,17 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
   
   // Deposit State
   const [depositAmount, setDepositAmount] = useState<number>(1000);
+  const [depositMethod, setDepositMethod] = useState<'upi' | 'card' | 'bank'>('upi');
   const [paymentStep, setPaymentStep] = useState<'options' | 'initiating' | 'upi' | 'processing' | 'success'>('options');
   const [selectedUpiApp, setSelectedUpiApp] = useState<string | null>(null);
   const [upiId, setUpiId] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Card details state
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState('');
 
   // Withdrawal State
   const [withdrawalAmount, setWithdrawalAmount] = useState<number>(0);
@@ -61,6 +73,7 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
   const [selectedBankId, setSelectedBankId] = useState('b1');
   const [withdrawUpiId, setWithdrawUpiId] = useState('');
   const [withdrawStep, setWithdrawStep] = useState<'options' | 'processing' | 'success'>('options');
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
   
   // KYC State
   const [showKycModal, setShowKycModal] = useState(false);
@@ -85,6 +98,7 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
 
   const simulateWithdrawal = () => {
     if (withdrawalAmount > balance) return;
+    setShowWithdrawConfirm(false);
     setWithdrawStep('processing');
     setTimeout(() => {
       onWithdraw(withdrawalAmount);
@@ -94,14 +108,20 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
 
   const resetDeposit = () => {
     setPaymentStep('options');
+    setDepositMethod('upi');
     setSelectedUpiApp(null);
     setUpiId('');
+    setCardNumber('');
+    setCardExpiry('');
+    setCardCvv('');
+    setCardName('');
   };
 
   const resetWithdrawal = () => {
     setWithdrawStep('options');
     setWithdrawalAmount(0);
     setWithdrawUpiId('');
+    setShowWithdrawConfirm(false);
   };
 
   const copyVPA = () => {
@@ -121,6 +141,8 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
       }, 3000);
     }
   };
+
+  const selectedBank = MOCK_BANKS.find(b => b.id === selectedBankId);
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
@@ -217,8 +239,8 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
           <>
             <div className="p-6 border-b border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <h3 className="text-xl font-bold flex items-center gap-2">
-                <Smartphone className="text-[#fbbf24]" />
-                Real-time UPI Deposit
+                <ArrowUpRight className="text-[#fbbf24]" />
+                Secure Deposit
               </h3>
               <div className="flex items-center gap-1 text-[10px] bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-bold self-start sm:self-auto">
                 <CheckCircle2 size={10} />
@@ -254,52 +276,166 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
                   </div>
 
                   <div className="space-y-4">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Choose UPI App (Instant Deep-link)</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {UPI_APPS.map(app => (
-                        <button 
-                          key={app.id}
-                          onClick={() => handleUpiAppSelect(app.id)}
-                          className="p-6 bg-[#0f0f0f] border-2 border-gray-800 rounded-2xl flex flex-col items-center gap-3 hover:border-[#fbbf24] hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
-                        >
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <Zap size={14} className="text-[#fbbf24]" />
-                          </div>
-                          <img src={app.icon} alt={app.name} className="h-8 grayscale group-hover:grayscale-0 transition-all" />
-                          <span className="text-xs font-bold text-gray-400 group-hover:text-white">{app.name}</span>
-                        </button>
-                      ))}
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select Payment Method</label>
+                    <div className="flex bg-[#0f0f0f] p-1 rounded-xl border border-gray-800">
+                      <button 
+                        onClick={() => setDepositMethod('upi')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-xs transition-all ${depositMethod === 'upi' ? 'bg-[#fbbf24] text-black shadow-md' : 'text-gray-500 hover:text-white'}`}
+                      >
+                        <Smartphone size={16} /> UPI
+                      </button>
+                      <button 
+                        onClick={() => setDepositMethod('card')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-xs transition-all ${depositMethod === 'card' ? 'bg-[#fbbf24] text-black shadow-md' : 'text-gray-500 hover:text-white'}`}
+                      >
+                        <CardIcon size={16} /> Card
+                      </button>
+                      <button 
+                        onClick={() => setDepositMethod('bank')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-xs transition-all ${depositMethod === 'bank' ? 'bg-[#fbbf24] text-black shadow-md' : 'text-gray-500 hover:text-white'}`}
+                      >
+                        <Building2 size={16} /> Net Banking
+                      </button>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Or Pay via UPI ID / QR</label>
-                      <button className="flex items-center gap-1 text-[10px] font-bold text-blue-400 uppercase">
-                        <QrCode size={12} />
-                        Show QR
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        placeholder="example@upi"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        className="flex-1 bg-[#0f0f0f] border-2 border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#fbbf24] transition-all"
-                      />
-                      <button 
-                        disabled={!upiId.includes('@')}
-                        onClick={() => {
-                           setSelectedUpiApp(null);
-                           setPaymentStep('processing');
-                           simulatePayment();
-                        }}
-                        className={`px-6 rounded-xl font-bold transition-all ${upiId.includes('@') ? 'bg-[#fbbf24] text-black shadow-lg' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
-                      >
-                        Pay Now
-                      </button>
-                    </div>
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    {depositMethod === 'upi' && (
+                      <div className="space-y-6">
+                        <div className="space-y-4">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Choose UPI App</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {UPI_APPS.map(app => (
+                              <button 
+                                key={app.id}
+                                onClick={() => handleUpiAppSelect(app.id)}
+                                className="p-6 bg-[#0f0f0f] border-2 border-gray-800 rounded-2xl flex flex-col items-center gap-3 hover:border-[#fbbf24] hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
+                              >
+                                <img src={app.icon} alt={app.name} className="h-8 grayscale group-hover:grayscale-0 transition-all" />
+                                <span className="text-xs font-bold text-gray-400 group-hover:text-white">{app.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Or Pay via UPI ID</label>
+                          </div>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="example@upi"
+                              value={upiId}
+                              onChange={(e) => setUpiId(e.target.value)}
+                              className="flex-1 bg-[#0f0f0f] border-2 border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#fbbf24] transition-all"
+                            />
+                            <button 
+                              disabled={!upiId.includes('@')}
+                              onClick={() => simulatePayment()}
+                              className={`px-6 rounded-xl font-bold transition-all ${upiId.includes('@') ? 'bg-[#fbbf24] text-black shadow-lg' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                            >
+                              Pay
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {depositMethod === 'card' && (
+                      <div className="space-y-6 bg-[#0f0f0f] p-6 rounded-2xl border border-gray-800">
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Cardholder Name</label>
+                            <input 
+                              type="text" 
+                              value={cardName}
+                              onChange={(e) => setCardName(e.target.value)}
+                              placeholder="Full Name" 
+                              className="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl px-4 py-3 focus:border-[#fbbf24] focus:outline-none transition-colors" 
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Card Number</label>
+                            <div className="relative">
+                               <input 
+                                type="text" 
+                                value={cardNumber}
+                                onChange={(e) => setCardNumber(e.target.value)}
+                                placeholder="0000 0000 0000 0000" 
+                                className="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl px-4 py-3 pl-12 focus:border-[#fbbf24] focus:outline-none transition-colors font-mono" 
+                              />
+                              <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Expiry</label>
+                              <input 
+                                type="text" 
+                                value={cardExpiry}
+                                onChange={(e) => setCardExpiry(e.target.value)}
+                                placeholder="MM/YY" 
+                                className="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl px-4 py-3 focus:border-[#fbbf24] focus:outline-none transition-colors font-mono" 
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">CVV</label>
+                              <div className="relative">
+                                <input 
+                                  type="password" 
+                                  value={cardCvv}
+                                  onChange={(e) => setCardCvv(e.target.value)}
+                                  placeholder="***" 
+                                  maxLength={3}
+                                  className="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl px-4 py-3 focus:border-[#fbbf24] focus:outline-none transition-colors font-mono" 
+                                />
+                                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={simulatePayment}
+                          className="w-full bg-[#fbbf24] text-black py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#d9a31d] transition-all"
+                        >
+                          <ShieldCheck size={20} />
+                          Pay ₹{depositAmount.toLocaleString()} Securely
+                        </button>
+                        <div className="flex items-center justify-center gap-4 opacity-40">
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className="h-4" alt="Visa" />
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" className="h-6" alt="Mastercard" />
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/c/cb/Rupay-Logo.svg" className="h-4" alt="Rupay" />
+                        </div>
+                      </div>
+                    )}
+
+                    {depositMethod === 'bank' && (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 gap-3">
+                          {MOCK_BANKS.map(bank => (
+                            <button 
+                              key={bank.id}
+                              onClick={() => {
+                                setSelectedBankId(bank.id);
+                                simulatePayment();
+                              }}
+                              className="p-4 bg-[#0f0f0f] border-2 border-gray-800 rounded-2xl flex items-center justify-between hover:border-[#fbbf24] hover:bg-[#1a1a1a] transition-all group"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="p-3 bg-gray-800 rounded-xl group-hover:bg-[#fbbf24]/10 group-hover:text-[#fbbf24] transition-colors">
+                                  {bank.icon}
+                                </div>
+                                <span className="font-bold text-gray-300 group-hover:text-white">{bank.name}</span>
+                              </div>
+                              <ChevronRight className="text-gray-600 group-hover:text-[#fbbf24]" size={20} />
+                            </button>
+                          ))}
+                        </div>
+                        <button className="w-full text-xs font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
+                          View All 50+ Banks
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -494,7 +630,7 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
 
                   <button 
                     disabled={withdrawalAmount <= 0 || withdrawalAmount > balance || (withdrawalMethod === 'upi' && !withdrawUpiId.includes('@'))}
-                    onClick={simulateWithdrawal}
+                    onClick={() => setShowWithdrawConfirm(true)}
                     className={`w-full py-4 rounded-2xl font-black text-lg shadow-xl transition-all transform active:scale-95 flex items-center justify-center gap-2 ${withdrawalAmount > 0 && withdrawalAmount <= balance ? 'bg-[#fbbf24] text-black hover:bg-[#d9a31d]' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
                   >
                     {withdrawalMethod === 'upi' && <Zap size={20} />}
@@ -550,6 +686,74 @@ const Wallet: React.FC<WalletProps> = ({ balance, onDeposit, onWithdraw, kycStat
           </>
         )}
       </div>
+
+      {/* Withdrawal Confirmation Modal */}
+      {showWithdrawConfirm && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-[#1a1a1a] w-full max-w-md rounded-3xl border border-gray-800 overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+              <h3 className="text-xl font-bold">Confirm Payout</h3>
+              <button onClick={() => setShowWithdrawConfirm(false)} className="text-gray-500 hover:text-white transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-8">
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">Withdrawal Amount</div>
+                <div className="text-4xl font-black text-white">₹{withdrawalAmount.toLocaleString()}</div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-[#0f0f0f] p-5 rounded-2xl border border-gray-800 space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500 font-bold uppercase tracking-wider">Payout Method</span>
+                    <span className="text-[#fbbf24] font-bold uppercase tracking-wider">{withdrawalMethod === 'upi' ? 'UPI Payout' : 'Bank Transfer'}</span>
+                  </div>
+                  <div className="flex items-center gap-4 py-2 border-t border-gray-800/50">
+                    <div className="p-3 bg-gray-800 rounded-xl text-[#fbbf24]">
+                      {withdrawalMethod === 'upi' ? <Smartphone size={20} /> : <Landmark size={20} />}
+                    </div>
+                    <div className="text-left overflow-hidden">
+                       <div className="text-sm font-bold text-white truncate">
+                         {withdrawalMethod === 'upi' ? withdrawUpiId : selectedBank?.name}
+                       </div>
+                       <div className="text-[10px] text-gray-500 font-mono">
+                         {withdrawalMethod === 'upi' ? 'Verified VPA' : selectedBank?.acc}
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                  <Info size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-[10px] text-blue-400/80 leading-relaxed font-medium">
+                    {withdrawalMethod === 'upi' 
+                      ? "Funds are usually settled instantly. Ensure your UPI ID is linked to your own bank account to avoid transaction failure."
+                      : "Bank transfers are processed via IMPS/NEFT. Funds usually reflect within a few hours but may take up to 24 hours depending on your bank."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setShowWithdrawConfirm(false)}
+                  className="py-4 bg-gray-800 hover:bg-gray-700 text-gray-400 font-bold rounded-2xl transition-all"
+                >
+                  Edit / Cancel
+                </button>
+                <button 
+                  onClick={simulateWithdrawal}
+                  className="py-4 bg-[#fbbf24] hover:bg-[#d9a31d] text-black font-black rounded-2xl shadow-xl shadow-[#fbbf24]/10 transition-all flex items-center justify-center gap-2"
+                >
+                  <Check size={20} />
+                  Confirm Payout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KYC Modal */}
       {showKycModal && (
